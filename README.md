@@ -1,2 +1,0 @@
-# Nutshell
-OS Project
