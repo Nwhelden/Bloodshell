@@ -80,9 +80,6 @@ void testCommandTable() {
 }
 
 int executeGeneral(char* path, char* params[]) {
-    int size = (sizeof(params)/sizeof(char*));
-    printf("%d\n", params[0]);
-
     pid_t pid;
 
     pid = fork();
@@ -140,29 +137,24 @@ void printEnv() {
     }
 }
 
-void checkGeneral(char* name, char* params[]) {
+void checkGeneral(char* name, char* params[], int size) {
     char* path = new char[strlen(name) + 5];
     strcpy(path, "/bin");
     strcat(path, "/");
     strcat(path, name);
     if (access(path, F_OK) == 0) {
-        int size = (sizeof(params)/sizeof(char*));
-        printf("%d\n", size);
         char* newParams[size + 2];
         newParams[0] = path;
         for (int i = 0; i < size; i++) {
             newParams[i + 1] = params[i];
         }
         newParams[size + 1] = NULL;
-        size = (sizeof(newParams)/sizeof(char*));
-        printf("%d\n", size);
         executeGeneral(path, newParams);
-    };
+    }
 }
 
-void addAlias(char* key, char* params[]) {
+void addAlias(char* key, char* params[], int size) {
     char* command = (char*)"";
-    int size = (sizeof(params)/sizeof(char*));
     for (int i = 1; i < size; i++) {
         strcat(command, " ");
         strcat(command, params[i]);
@@ -205,10 +197,10 @@ int processCommand() {
     for (int i = 0; i < cmdTable.size(); i++) {
         char* name = cmdTable[i]->name;
         char* params[cmdTable[i]->parameters.size()];
+        int size = sizeof(params)/sizeof(char*);
         for (int j = 0; j < cmdTable[i]->parameters.size(); j++) {
             params[j] = cmdTable[i]->parameters[j];
         }
-        printf("%d\n", sizeof(params)/sizeof(char*));
         if (aliases.find(name) != aliases.end()) {
             executeAlias(name);
         } else {
@@ -225,7 +217,7 @@ int processCommand() {
                     printAliases();
                     return 0;
                 } else {
-                    addAlias(params[1], params);
+                    addAlias(params[1], params, size);
                     return 0;
                 }
             } else if (strcmp(name, "unalias") == 0) {
@@ -236,7 +228,7 @@ int processCommand() {
             } else if (strcmp(name, "bye") == 0) {
                 return 1;
             } else {
-                checkGeneral(name, params);
+                checkGeneral(name, params, size);
                 return 0;
             }
         }
