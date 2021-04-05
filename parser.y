@@ -3,43 +3,51 @@
     #include "command.h"
     int yylex();
     extern std::vector<Command*> cmdTable;
-    void yyerror(char* s);
+    void yyerror(const char* s);
     void addCommand(char* name);
 %}
 
+%define parse.error verbose
+
 %define api.value.type union 
 
-%token <char*> WORD NAME
+%token <char*> WORD ENV
 %token UNDEFINED NEWLINE
 
 %%
 
-line: cmd NEWLINE { return 0; }
+line: NEWLINE { return 0; }
+    | ENV NEWLINE { printf("%s\n", $1); return 0; }
+    | cmd NEWLINE { return 0; }
     ;
 
-cmd: name parameters stdin_redirection stdout_redirection {;}
+cmd: name parameters stdin_redirection stdout_redirection background {;}
    ;
 
-name: NAME { addCommand($1); }
-    ;
+name: WORD { addCommand($1); }
+;
 
 parameters: %empty {;}
          | WORD parameters { cmdTable.back()->parameters.push_back($1); }
-         | NAME parameters { cmdTable.back()->parameters.push_back($1); }
          ;
 
 stdin_redirection: %empty {;}
-                 | '<' NAME { cmdTable.back()->input = $2; }
+                 | '<' WORD { cmdTable.back()->input = $2; }
                  ;
 
 stdout_redirection: %empty {;}
-                  | '>' NAME { cmdTable.back()->output = $2; }
+                  | '>' WORD { cmdTable.back()->output = $2; }
                   | '|' cmd {;}
                   ;
 
+background: %empty { cmdTable.back()->background = false; }
+          | '&' { cmdTable.back()->background = true; }
+          ;
+
 %%
 
-void yyerror(char* s){ 
+//called if a token scanned by yylex has no associated rule
+void yyerror(const char* s){ 
     fprintf(stderr, "%s\n", s);
 };
 
