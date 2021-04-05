@@ -23,6 +23,7 @@ std::vector<Command*> cmdTable;
 std::vector<char*> strTable;
 extern char ** environ;
 std::map<char*, char*> aliases;
+bool scanStart;
 
 //
 void printPrompt() {
@@ -47,6 +48,18 @@ void cleanUp() {
         free(strTable[i]);
     }
     strTable.clear();
+
+    scanStart = true;    
+}
+
+void freeMem() {
+    //clear alias table
+    std::map<char*,char*>::iterator iter;
+    for (iter = aliases.begin(); iter != aliases.end(); iter++) {
+        free(iter->second);
+        free(iter->first);
+    }
+    aliases.clear();
 }
 
 void testCommandTable() {
@@ -70,6 +83,12 @@ void testCommandTable() {
         }
         else {
             printf("%s\n", cmdTable[i]->output);
+        }
+        if (cmdTable[i]->background) {
+            printf("command executed in background\n");
+        }
+        else {
+            printf("shell waits for command to finish\n");
         }
         printf("\n");
     }
@@ -153,21 +172,47 @@ void checkGeneral(char* name, char* params[], int size) {
     }
 }
 
-void addAlias(char* key, char* params[], int size) {
-    char* command = (char*)"";
-    for (int i = 1; i < size; i++) {
-        strcat(command, " ");
-        strcat(command, params[i]);
+void addAlias(char* params[], int size) {
+    if (size != 2) {
+        fprintf(stderr, "Error: invalid usage of 'alias'\n");
+        return;
     }
-    aliases[key] = command;
+
+    char* key = params[1];
+    char* value = params[0];
+
+    //check for infinite loop (can't have alias as the value of another alias)
+    if (aliases.size() != 0) {
+        std::map<char*,char*>::iterator iter;
+        for (iter = aliases.begin(); iter != aliases.end(); iter++) {
+            if (strcmp(iter->first, value) == 0) {
+                fprintf(stderr, "Error: '%s' is an alias\n", value);
+                return;
+            }
+            else if (strcmp(iter->first, key) == 0) {
+                fprintf(stderr, "Error: alias for '%s' already exists\n", key);
+                return;
+            }
+        }
+    }
+
+    //parameters will be forgotten if not dynamically allocated
+    char* temp1 = strdup(key);
+    char* temp2 = strdup(value);
+    aliases[temp1] = temp2;
 }
 
 void removeAlias(char* key) {
-    aliases.erase(key);
-}
+    //key and value of alias map point to text on heap
+    std::map<char*,char*>::iterator iter;
+    for (iter = aliases.begin(); iter != aliases.end(); iter++) {
+        if (strcmp(iter->first, key) == 0) {
+            free(iter->second);
+            free(iter->first);
+        }
+    }
 
-void executeAlias(char* command) {
-    
+    aliases.erase(key);
 }
 
 void printAliases() {
@@ -201,36 +246,34 @@ int processCommand() {
         for (int j = 0; j < cmdTable[i]->parameters.size(); j++) {
             params[j] = cmdTable[i]->parameters[j];
         }
-        if (aliases.find(name) != aliases.end()) {
-            executeAlias(name);
-        } else {
-            if (strcmp(name, "setenv") == 0) {
-                setEnv(params[0], params[1]);
+
+        //go through built-in 
+        if (strcmp(name, "setenv") == 0) {
+            setEnv(params[0], params[1]);
+            return 0;
+        } else if (strcmp(name, "unsetenv") == 0) {
+            unsetEnv(params[0]);
+            return 0;
+        } else if (strcmp(name, "printenv") == 0) {
+            printEnv(); return 0;
+        } else if (strcmp(name, "alias") == 0) {
+            if (cmdTable[i]->parameters.size() == 0) {
+                printAliases();
                 return 0;
-            } else if (strcmp(name, "unsetenv") == 0) {
-                unsetEnv(params[0]);
-                return 0;
-            } else if (strcmp(name, "printenv") == 0) {
-                printEnv(); return 0;
-            } else if (strcmp(name, "alias") == 0) {
-                if (cmdTable[i]->parameters.size() == 0) {
-                    printAliases();
-                    return 0;
-                } else {
-                    addAlias(params[1], params, size);
-                    return 0;
-                }
-            } else if (strcmp(name, "unalias") == 0) {
-                removeAlias(params[1]);
-                return 0;
-            } else if (strcmp(name, "cd") == 0) {
-                changeDir(params[0]);
-            } else if (strcmp(name, "bye") == 0) {
-                return 1;
             } else {
-                checkGeneral(name, params, size);
+                addAlias(params, size);
                 return 0;
             }
+        } else if (strcmp(name, "unalias") == 0) {
+            removeAlias(params[1]);
+            return 0;
+        } else if (strcmp(name, "cd") == 0) {
+            changeDir(params[0]);
+        } else if (strcmp(name, "bye") == 0) {
+            return 1;
+        } else {
+            checkGeneral(name, params, size);
+            return 0;
         }
     }
 }
@@ -240,25 +283,19 @@ int main() {
     shell_init();
     while(1) {
         printPrompt();
-        yyparse();
-        if (processCommand() == 1) {
-		    printf("Successfully exited shell\n");
-			break;
-		};
-        /*
-        switch(yyparse()) {
-			case 0: if (processCommand() == 1) {
-						printf("Successfully exited shell");
-						break;
-					};
-			case 1: fprintf(stderr, "%s\n", "Syntax Error");
-					break;
-			default: break;
-		}
-        */
-        //testCommandTable();
+        if (yyparse() == 0) {
+            if (processCommand() == 1) {
+                printf("Successfully exited shell\n");
+                break;
+            }
+        }
+        //parser error already handled in .y
+
+        testCommandTable();
         yyrestart(yyin);
         cleanUp();
     }
+    freeMem();
+
    return 0;
 }
