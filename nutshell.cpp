@@ -10,6 +10,8 @@
 #include <vector>
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #define ANSI_COLOR_RED     "\x1b[31m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
@@ -100,7 +102,7 @@ void testCommandTable() {
 
 int executeGeneral(char* path, char* params[]) {
     pid_t pid;
-
+    
     pid = fork();
     if (pid < 0) {
         printf("Error. Try again.\n");
@@ -108,7 +110,77 @@ int executeGeneral(char* path, char* params[]) {
     } else {
         if (pid == 0) {
             execv(path, params);
-            printf("Success\n");
+            return EXIT_SUCCESS;
+        } else {
+            if (!background) {
+                wait(NULL);
+            }
+            EXIT_SUCCESS;
+        }
+    }
+}
+
+int inputRedirect(char* path, char* params[], char* file) {
+    pid_t pid;
+
+    pid = fork();
+    
+    if (pid < 0) {
+        printf("Error. Try again.\n");
+        return EXIT_FAILURE;
+    } else {
+        if (pid == 0) {
+            int fd = open(file, O_RDONLY);
+            dup2(fd, STDIN_FILENO);
+            close(fd);
+            execv(path, params);
+            return EXIT_SUCCESS;
+        } else {
+            wait(NULL);
+            EXIT_SUCCESS;
+        }
+    }
+}
+
+int outputRedirect (char* path, char* params[], char* file) {
+    pid_t pid;
+
+    pid = fork();
+    
+    if (pid < 0) {
+        printf("Error. Try again.\n");
+        return EXIT_FAILURE;
+    } else {
+        if (pid == 0) {
+            int fd = open(file, O_RDWR | O_CREAT , 0600);
+            dup2(fd, STDOUT_FILENO);
+            close(fd);
+            execv(path, params);
+            return EXIT_SUCCESS;
+        } else {
+            wait(NULL);
+            EXIT_SUCCESS;
+        }
+    }
+}
+
+int ioRedirect (char* path, char* params[], char* input, char* output) {
+    pid_t pid;
+
+    pid = fork();
+    
+    if (pid < 0) {
+        printf("Error. Try again.\n");
+        return EXIT_FAILURE;
+    } else {
+        if (pid == 0) {
+            int fdin = open(input, O_RDONLY);
+            dup2(fdin, STDIN_FILENO); 
+            close(fdin);
+            int fdout = open(output, O_RDWR | O_CREAT , 0600);
+            dup2(fdout, STDOUT_FILENO);
+            close(fdout);
+            execv(path, params);
             return EXIT_SUCCESS;
         } else {
             wait(NULL);
@@ -121,8 +193,8 @@ void shell_init() {
     char cwd[PATH_MAX];
     getcwd(cwd, sizeof(cwd));
     setenv("PATH", ".:/bin", 1);
-    setenv("HOME", cwd, 1);
-    setenv("PWD", cwd, 1);
+    //setenv("HOME", cwd, 1);
+    //setenv("PWD", cwd, 1);
     /*
     for(int i = 0; sizeof(environ), i++) {
         if (environ[i].substr(0,4) == "PATH") {
@@ -135,20 +207,22 @@ void shell_init() {
     */
 }
 
+/*
 void setEnv(char* var, char* word) {
     setenv(var, word, 1);
-    /*
     for(int i = 0; sizeof(environ), i++) {
         if (environ[i].find(var) != std::string::npos) {
             environ[i] = var + "=" + word;
         }
     }
-    */
+    
 }
 
 void unsetEnv(char* var) {
     unsetenv(var);
 }
+
+*/
 
 void printEnv() {
     for(int i = 0; i < sizeof(environ); i++) {
@@ -156,19 +230,37 @@ void printEnv() {
     }
 }
 
-void checkGeneral(char* name, char* params[], int size) {
-    char* path = new char[strlen(name) + 5];
-    strcpy(path, "/bin");
-    strcat(path, "/");
-    strcat(path, name);
-    if (access(path, F_OK) == 0) {
-        char* newParams[size + 2];
-        newParams[0] = path;
-        for (int i = 0; i < size; i++) {
-            newParams[i + 1] = params[i];
+void checkGeneral(char* name, char* params[], int size, char* input, char* output) {
+    char* path = getenv("PATH");
+    char temp[strlen(path)];
+    strcpy(temp, path);
+    char* delim = strtok(path, ":");
+    setenv("PATH", temp, 1);
+
+    while (delim != NULL) {
+        char* filePath = new char[strlen(name) + strlen(delim) + 1];
+        strcpy(filePath, delim);
+        strcat(filePath, "/");
+        strcat(filePath, name);
+        if (access(filePath, F_OK) == 0) {
+            char* newParams[size + 2];
+            newParams[0] = filePath;
+            for (int i = 0; i < size; i++) {
+                newParams[i + 1] = params[i];
+            }
+            newParams[size + 1] = NULL;
+            if (input == NULL && output == NULL) {
+                executeGeneral(filePath, newParams);
+            } else if (input != NULL && output == NULL) {
+                inputRedirect(filePath, newParams, input);
+            } else if (input == NULL && output != NULL) {
+                outputRedirect(filePath, newParams, output);
+            } else {
+                ioRedirect(filePath, newParams, input, output);
+            }
+            break;
         }
-        newParams[size + 1] = NULL;
-        executeGeneral(path, newParams);
+        delim = strtok(NULL, ":");
     }
 }
 
@@ -223,16 +315,22 @@ void printAliases() {
 }
 
 void changeDir(char* file) {
-    char* currentDir = getenv("PWD");
+    char currentDir[strlen(getenv("PWD"))];
+    strcpy(currentDir, getenv("PWD"));
     if (file[0] != '/') {
         strcat(currentDir, "/");
         strcat(currentDir, file);
-        setenv("PWD", currentDir, 1);
-        if (chdir(getenv("PWD")) != 0) {
+        if (chdir(currentDir) == 0) {
+            setenv("PWD", currentDir, 1);
+        } else {
             std::cout << "Directory not found" << std::endl;
         }
     } else {
-        if (chdir(file) != 0) {
+        strcat(currentDir, "/");
+        strcat(currentDir, file);
+        if (chdir(currentDir) == 0) {
+            setenv("PWD", currentDir, 1);
+        } else {
             std::cout << "Directory not found" << std::endl;
         }
     }
@@ -241,21 +339,24 @@ void changeDir(char* file) {
 int processCommand() {
     for (int i = 0; i < cmdTable.size(); i++) {
         char* name = cmdTable[i]->name;
+        char* input = cmdTable[i]->input;
+        char* output = cmdTable[i]->output;
         char* params[cmdTable[i]->parameters.size()];
         int size = sizeof(params)/sizeof(char*);
+        
         for (int j = 0; j < cmdTable[i]->parameters.size(); j++) {
             params[j] = cmdTable[i]->parameters[j];
         }
-
         //go through built-in 
         if (strcmp(name, "setenv") == 0) {
-            setEnv(params[0], params[1]);
+            setenv(params[0], params[1], 1);
             return 0;
         } else if (strcmp(name, "unsetenv") == 0) {
-            unsetEnv(params[0]);
+            unsetenv(params[0]);
             return 0;
         } else if (strcmp(name, "printenv") == 0) {
-            printEnv(); return 0;
+            printEnv(); 
+            return 0;
         } else if (strcmp(name, "alias") == 0) {
             if (cmdTable[i]->parameters.size() == 0) {
                 printAliases();
@@ -268,11 +369,16 @@ int processCommand() {
             removeAlias(params[1]);
             return 0;
         } else if (strcmp(name, "cd") == 0) {
-            changeDir(params[0]);
+            if (size == 0) {
+                chdir(getenv("HOME"));
+            } else {
+                changeDir(params[0]);
+            }
         } else if (strcmp(name, "bye") == 0) {
             return 1;
         } else {
-            checkGeneral(name, params, size);
+            
+            checkGeneral(name, params, size, input, output);
             return 0;
         }
     }
@@ -290,8 +396,7 @@ int main() {
             }
         }
         //parser error already handled in .y
-
-        testCommandTable();
+        //testCommandTable();
         yyrestart(yyin);
         cleanUp();
     }
