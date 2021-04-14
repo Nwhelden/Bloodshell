@@ -6,9 +6,9 @@
     void yyerror(const char* s);
     void addCommand(char* name);
     extern bool background;
+    extern int yylineno;
+    extern char* yytext;
 %}
-
-%define parse.error verbose
 
 %define api.value.type union 
 
@@ -47,7 +47,7 @@ stdout_redirection: %empty {;}
 
 stderr_redirection: %empty {;}
                   | ERRDIR WORD { cmdTable.back()->err = $2; }
-                  | ERRDIR2 { cmdTable.back()->errToOut = true; cmdTable.back()->err = "stdout"; }
+                  | ERRDIR2 { cmdTable.back()->errToOut = true; cmdTable.back()->errToOut = "stdout"; }
                   ;
 
 background: %empty {;}
@@ -58,7 +58,8 @@ background: %empty {;}
 
 //called if a token scanned by yylex has no associated rule
 void yyerror(const char* s){ 
-    fprintf(stderr, "%s\n", s);
+    //fprintf(stderr, "%s\n", s);
+    fprintf(stderr, "Syntax error [line %d]: '%s' unrecognized\n", yylineno, yytext);
 };
 
 Command::Command(char* name): builtIn { false }, outAppend { false }, errToOut { false }, input{ nullptr }, output{ nullptr }, err { nullptr }, 

@@ -78,52 +78,57 @@ void testCommandTable() {
     }
 }
 
-void setEnv(char* params[], int size) {
+int setEnv(char* params[], int size) {
     //error cases
     if (size != 2) {
         fprintf(stderr, "Error: invalid parameters for 'setenv'\n");
+        return 1;
     }
 
     setenv(params[1], params[2], 1);
+    return 0;
 }
 
-void unsetEnv(char* params[], int size) {
+int unsetEnv(char* params[], int size) {
     //error cases
     if (size != 1) {
         fprintf(stderr, "Error: invalid parameters for 'unsetenv'\n");
+        return 1;
     }
 
     unsetenv(params[1]);
+    return 0;
 }
 
-void printEnv(char* params[], int size) {
+int printEnv(char* params[], int size) {
     //error cases
     if (size != 0) {
         fprintf(stderr, "Error: invalid parameters for 'printenv'\n");
-        return;
+        return 1;
     }
 
     for(int i = 0; environ[i] != NULL; i++) {
         printf("%s\n", environ[i]);
     }
+    return 0;
 }
 
-void addAlias(char* params[], int size) {
+int addAlias(char* params[], int size) {
     //error cases
     if (size != 2) {
         fprintf(stderr, "Error: invalid parameters for 'alias'\n");
-        return;
+        return 1;
     }
 
     char* key = params[1];
     char* value = params[2];
     if (strcmp(key, value) == 0) {
         fprintf(stderr, "Error: can't set an alias to itself\n");
-        return;
+        return 1;
     }
     else if (strcmp(key, "unalias") == 0) {
         fprintf(stderr, "Error: can't use 'unalias' as an alias\n");
-        return;
+        return 1;
     }
 
     //check for infinite loop (can't have alias as the value of another alias)
@@ -151,12 +156,12 @@ void addAlias(char* params[], int size) {
 
                 if (strcmp(nextValue, key) == 0) {
                     fprintf(stderr, "Error: '%s' is an alias and causes an infinite loop\n", value);
-                    return;
+                    return 1;
                 }
             }
             else if (strcmp(iter->first, key) == 0) {
                 fprintf(stderr, "Error: alias for '%s' already exists\n", key);
-                return;
+                return 1;
             }
         }
     }
@@ -165,12 +170,14 @@ void addAlias(char* params[], int size) {
     char* temp1 = strdup(key);
     char* temp2 = strdup(value);
     aliases[temp1] = temp2;
+    return 0;
 }
 
-void removeAlias(char* params[], int size) {
+int removeAlias(char* params[], int size) {
     //error cases
     if (size != 1) {
         fprintf(stderr, "Error: invalid parameters for 'unalias'\n");
+        return 1;
     }
 
     char* key = params[1];
@@ -182,11 +189,12 @@ void removeAlias(char* params[], int size) {
             free(iter->second);
             free(iter->first);
             aliases.erase(key);
-            return;
+            return 0;
         }
     }
 
     fprintf(stderr, "Error: alias for '%s' not found\n", key);
+    return 1;
 }
 
 void printAliases() {
@@ -196,7 +204,12 @@ void printAliases() {
     }
 }
 
-void changeDir(char* params[], int size) {
+int changeDir(char* params[], int size) {
+    if (size != 1) {
+        fprintf(stderr, "Error: invalid parameters for 'cd'\n");
+        return 1; 
+    }
+
     char* file = params[1];
 
     char currentDir[strlen(getenv("PWD"))];
@@ -207,7 +220,8 @@ void changeDir(char* params[], int size) {
         if (chdir(currentDir) == 0) {
             setenv("PWD", currentDir, 1);
         } else {
-            std::cout << "Directory not found" << std::endl;
+            fprintf(stderr, "Error: directory '%s' not found\n", file);
+            return 1;
         }
     } else {
         strcat(currentDir, "/");
@@ -215,9 +229,12 @@ void changeDir(char* params[], int size) {
         if (chdir(currentDir) == 0) {
             setenv("PWD", currentDir, 1);
         } else {
-            std::cout << "Directory not found" << std::endl;
+            fprintf(stderr, "Error: directory '%s' not found\n", file);
+            return 1;
         }
     }
+
+    return 0;
 }
 
 bool checkFiles(int index) {
@@ -233,12 +250,12 @@ bool checkFiles(int index) {
 
         if (access(filePath, F_OK) == 0) {
             if(access(filePath, R_OK) != 0) {
-                printf("Error: permission to read '%s' denied\n", fileName);
+                fprintf(stderr, "Error: permission to read '%s' denied\n", fileName);
                 return false;
             }
         }
         else {
-            printf("Error: '%s' not found\n", fileName);
+            fprintf(stderr, "Error: file '%s' not found\n", fileName);
             return false;
         }
     }
@@ -253,12 +270,12 @@ bool checkFiles(int index) {
 
         if (access(filePath, F_OK) == 0) {
             if(access(filePath, W_OK) != 0) {
-                printf("Error: permission to write to '%s' denied\n", fileName);
+                fprintf(stderr, "Error: permission to write to '%s' denied\n", fileName);
                 return false;
             }
         }
         else {
-            printf("Error: '%s' not found\n", fileName);
+            fprintf(stderr, "Error: file '%s' not found\n", fileName);
             return false;
         }        
     }
@@ -273,12 +290,12 @@ bool checkFiles(int index) {
 
         if (access(filePath, F_OK) == 0) {
             if(access(filePath, W_OK) != 0) {
-                printf("Error: permission to write to '%s' denied\n", fileName);
+                fprintf(stderr, "Error: permission to write to '%s' denied\n", fileName);
                 return false;
             }
         }
         else {
-            printf("Error: '%s' not found\n", fileName);
+            fprintf(stderr, "Error: file '%s' not found\n", fileName);
             return false;
         }  
     }
@@ -321,13 +338,13 @@ bool checkCommand(char* name, int index) {
                 return true;
             }
             else {
-                printf("Error: permission to execute '%s' denied\n", name);
+                fprintf(stderr, "Error: permission to execute '%s' denied\n", name);
                 return false;
             }
         }
         delim = strtok(NULL, ":");
     }
-    printf("Error: command '%s' does not exist in PATH\n", name);
+    fprintf(stderr, "Error: command '%s' does not exist in PATH\n", name);
     return false;
 }
 
@@ -341,7 +358,7 @@ void inputRedirect(int index) {
             close(fd); 
         }
         else { 
-            printf("Error: '%s' can't be directed input", cmdTable[index]->name);
+            fprintf(stderr, "Error: '%s' can't be directed input", cmdTable[index]->name);
             exit(1); //inputRedirect is a helper function for child process, so end process on error
         }   
     }
@@ -355,16 +372,16 @@ void outputRedirect(int index) {
         if (cmdTable[index]->filepath != nullptr || strcmp(name, "alias") == 0 || strcmp(name, "printenv") == 0) {
             int fd;
             if (cmdTable[index]->outAppend) {
-                fd = open(cmdTable[index]->output, O_WRONLY | O_CREAT | O_APPEND);
+                fd = open(cmdTable[index]->output, O_WRONLY | O_APPEND);
             }
             else {
-                fd = open(cmdTable[index]->output, O_WRONLY | O_CREAT);
+                fd = open(cmdTable[index]->output, O_WRONLY);
             }
             dup2(fd, STDOUT_FILENO);
             close(fd);
         }
         else {
-            printf("Error: '%s' can't redirect output", cmdTable[index]->name);
+            fprintf(stderr, "Error: '%s' can't redirect output", cmdTable[index]->name);
             exit(1);
         }
     }
@@ -376,60 +393,100 @@ void outputRedirect(int index) {
             //stderr redirection
             if (cmdTable[index]->err != nullptr) {
                 if (cmdTable[index]->errToOut) {
-                    dup2(STDERR_FILENO, STDOUT_FILENO);
+                    dup2(STDOUT_FILENO, STDERR_FILENO);
                 }
                 else {
-                    int fd = open(cmdTable[index]->err, O_WRONLY | O_CREAT);
+                    int fd = open(cmdTable[index]->err, O_WRONLY );
                     dup2(fd, STDERR_FILENO);
                     close(fd);
                 }
             } 
         }
         else {
-            printf("Error: '%s' can't redirect error", cmdTable[index]->name);
+            fprintf(stderr, "Error: '%s' can't redirect error", cmdTable[index]->name);
             exit(1);
         }   
     }
 }
+
+int builtIn(char* params[], int size, int index) {
+    //if there is error redirection, set stderr to file
+    int savedFd = -1;
+    if (cmdTable[index]->err != nullptr) {
+        savedFd = dup(1);
+        if (cmdTable[index]->errToOut) {
+            dup2(STDOUT_FILENO, STDERR_FILENO);
+        }
+        else {
+            int fd = open(cmdTable[index]->err, O_WRONLY);
+            dup2(fd, STDERR_FILENO);
+            close(fd);
+        }
+    }
+
+    int rVal;
+    char* name = cmdTable[index]->name;
+    if (strcmp(name, "setenv") == 0) {
+        rVal = setEnv(params, size);
+    } else if (strcmp(name, "unsetenv") == 0) {
+        rVal = unsetEnv(params, size);
+    } else if (strcmp(name, "alias") == 0) {
+        if (size != 0) {
+            rVal = addAlias(params, size);
+        }
+    } else if (strcmp(name, "unalias") == 0) {
+        rVal = removeAlias(params, size);
+    } else if (strcmp(name, "cd") == 0) {
+        rVal = changeDir(params, size);
+    } else if (strcmp(name, "bye") == 0) {
+        endShell = true;
+        rVal = 0;
+    } 
+
+    //restore stderr to terminal
+    if (cmdTable[index]->err != nullptr) {
+        dup2(savedFd, STDERR_FILENO);
+        close(savedFd);
+    }
+
+    return rVal;
+} 
 
 void setupOnly(char* params[], int size, int index) {
     //setup IO as needed
     inputRedirect(index);
     outputRedirect(index);
 
+    //run built-ins that have IO redirection
     char* name = cmdTable[index]->name;
-    if (strcmp(name, "setenv") == 0) {
-        setEnv(params, size);
-    } else if (strcmp(name, "unsetenv") == 0) {
-        unsetEnv(params, size);
-    } else if (strcmp(name, "printenv") == 0) {
-        printEnv(params, size); 
-    } else if (strcmp(name, "alias") == 0) {
-        if (size == 0) {
-            printAliases();
-        } else {
-            addAlias(params, size);
+    if (strcmp(name, "printenv") == 0) {
+        if (printEnv(params, size) == 1) {
+            exit(1);
         }
-    } else if (strcmp(name, "unalias") == 0) {
-        removeAlias(params, size);
-    } else if (strcmp(name, "cd") == 0) {
-        changeDir(params, size);
-    } else if (strcmp(name, "bye") == 0) {
-        endShell = true;
-    } 
+    } else if (strcmp(name, "alias") == 0) {
+        printAliases();
+    }
 }
 
-void setupFirst(char* params[], int index, int* pipe) {
+void setupFirst(char* params[], int size, int index, int* pipe) {
     //setup IO as needed
     inputRedirect(index);
 
     char* name = cmdTable[index]->name;
-    if (params[0] != nullptr || strcmp(name, "alias") == 0 || strcmp(name, "alias") == 0) {
+    if (params[0] != nullptr || (strcmp(name, "alias") == 0 && size == 0) || strcmp(name, "printenv") == 0) {
         //child replaces stdout with the write-end of the pipe
         dup2(pipe[1], STDOUT_FILENO);
+        if (strcmp(name, "printenv") == 0) {
+            if (printEnv(params, size) == 1) {
+                exit(1);
+            }
+        }
+        else if (strcmp(name, "alias") == 0) {
+            printAliases();
+        }
     }
     else {
-        printf("Error: output of '%s' can't be piped", cmdTable[index]->name);
+        fprintf(stderr, "Error: '%s' can't be piped\n", cmdTable[index]->name);
         exit(1);
     }
 }
@@ -461,7 +518,7 @@ void setupLast(char* params[], int index, int* pipe) {
         dup2(pipe[0], STDIN_FILENO);
     }
     else {
-        printf("Error: output of '%s' can't be piped", cmdTable[index]->name);
+        fprintf(stderr, "Error: output of '%s' can't be piped\n", cmdTable[index]->name);
         exit(1);
     }
 }
@@ -481,23 +538,24 @@ int processCommand() {
         }
     }
 
-    printf("test3\n");
     //create pipes as needed
     std::vector<int*> pipes;
-    for (int i = 0; i < cmdTable.size() - 1; i++) {
-        int* p = new int[2]; //memleak
-        //int p[2];
-        if (pipe(p) == -1) {
-            perror("Pipe error");
-            return 1;
+    if (cmdTable.size() > 1) {
+        for (int i = 0; i < cmdTable.size() - 1; i++) {
+            int* p = new int[2]; //memleak
+            //int p[2];
+            if (pipe(p) == -1) {
+                perror("Pipe");
+                return 1;
+            }
+            pipes.push_back(p);
         }
-        pipes.push_back(p);
     }
 
     //keeps track of pid
     std::vector<pid_t> children;
 
-    //parent forks for each command in command line
+    //parent forks for each general command in command line
     pid_t pid;
     for (int i = 0; i < cmdTable.size(); i++) {
         //reorganize parameters into array
@@ -513,10 +571,19 @@ int processCommand() {
         char* name = cmdTable[i]->name;
         int size = cmdTable[i]->parameters.size();
 
-        //execute command
+        //certain built-ins can't be run in background
+        //child processes have different memory spaces than parent, so running 'cd', 'setenv', etc. would be pointless
+        if (cmdTable[i]->filepath == nullptr && cmdTable.size() == 1) {
+            //want alias and printenv to redirect their stdout to a file/pipe using a process
+            if ((strcmp(name, "alias") == 0 && size != 0) && strcmp(name, "printenv") != 0) {
+                return builtIn(params, size, i);
+            }
+        }
+
+        //general commands and select built-in can be run in the background (by child processes)
         pid = fork();
         if (pid < 0) {
-            printf("Error: fork failed for command '%s'\n", name);
+            fprintf(stderr, "Error: fork failed for command '%s'\n", name);
             return 1;
         }
         else if (pid == 0) {
@@ -525,7 +592,7 @@ int processCommand() {
                 setupOnly(params, size, i);
             }
             else if (i == 0) { //first command in pipe
-                setupFirst(params, i, pipes[i]);
+                setupFirst(params, size, i, pipes[i]);
             }
             else if (i > 0 && i < cmdTable.size() - 1) { //middle of pipe
                 setupMiddle(params, i, pipes[i - 1], pipes[i]);
@@ -544,7 +611,7 @@ int processCommand() {
             //if filepath == nullptr, then a built-in executed 
             if (params[0] != nullptr) {
                 execv(params[0], params); //exec only returns if there is an error
-                perror("Error");
+                perror("Execv");
                 exit(1);
             }
             exit(0); //exec already returns on success for general commands, need to return for built-in
@@ -561,7 +628,7 @@ int processCommand() {
     //after creating children, wait if needed
     //wait() suspends execution until a child terminates (since pipes are blocking, children complete by order in pipe)
     if (background == false) {
-        for (int i = 0; i < cmdTable.size(); i++) {
+        for (int i = 0; i < children.size(); i++) {
             int status;
             wait(&status); //equivalent to waitpid(-1, &status, 0);
 
