@@ -26,7 +26,7 @@ line: NEWLINE { return 0; }
 cmd: name parameters stdin_redirection out_redirection stdout_redirection stderr_redirection background {;}
    ;
 
-cmd2: name parameters out_redirection stdout_redirection stderr_redirection background {;}
+cmd2: name parameters out_redirection stdout_redirection stderr_redirection background { return 0;}
    ;
 
 name: WORD { addCommand($1); }
