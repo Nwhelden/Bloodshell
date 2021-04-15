@@ -1,5 +1,6 @@
 %{
     #include <stdio.h>
+    #include <string.h>
     #include "command.h"
     int yylex();
     extern std::vector<Command*> cmdTable;
@@ -25,6 +26,9 @@ line: NEWLINE { return 0; }
 cmd: name parameters stdin_redirection out_redirection stdout_redirection stderr_redirection background {;}
    ;
 
+cmd2: name parameters out_redirection stdout_redirection stderr_redirection background {;}
+   ;
+
 name: WORD { addCommand($1); }
 ;
 
@@ -36,7 +40,7 @@ stdin_redirection: %empty {;}
                  | '<' WORD { cmdTable.back()->input = $2; }
                  ;
 
-out_redirection: '|' cmd {;}
+out_redirection: '|' cmd2 {;}
                | stdout_redirection stderr_redirection {;}
 
 
@@ -47,7 +51,7 @@ stdout_redirection: %empty {;}
 
 stderr_redirection: %empty {;}
                   | ERRDIR WORD { cmdTable.back()->err = $2; }
-                  | ERRDIR2 { cmdTable.back()->errToOut = true; cmdTable.back()->errToOut = "stdout"; }
+                  | ERRDIR2 { cmdTable.back()->errToOut = true; }
                   ;
 
 background: %empty {;}

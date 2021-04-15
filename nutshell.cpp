@@ -79,25 +79,33 @@ void testCommandTable() {
     }
 }
 
-int setEnv(std::vector<char*> params, int size) {
+int setEnv(char* params[], int size) {
     //error cases
     if (size != 2) {
         fprintf(stderr, "Error: invalid parameters for 'setenv'\n");
         return 1;
     }
 
-    setenv(params[1], params[0], 1);
+    setenv(params[1], params[2], 1);
     return 0;
 }
 
-int unsetEnv(std::vector<char*> params, int size) {
+int unsetEnv(char* params[], int size) {
     //error cases
     if (size != 1) {
         fprintf(stderr, "Error: invalid parameters for 'unsetenv'\n");
         return 1;
     }
+    else if (strcmp(params[1], "PATH") == 0) {
+        fprintf(stderr, "Error: cannot unset 'PATH' variable\n");
+        return 1;
+    }
+    else if (strcmp(params[1], "HOME") == 0) {
+        fprintf(stderr, "Error: cannot unset 'HOME' variable\n");
+        return 1;
+    }
 
-    unsetenv(params[0]);
+    unsetenv(params[1]);
     return 0;
 }
 
@@ -114,7 +122,7 @@ int printEnv(int size) {
     return 0;
 }
 
-int addAlias(std::vector<char*> params, int size) {
+int addAlias(char* params[], int size) {
     //error cases
     if (size != 2) {
         fprintf(stderr, "Error: invalid parameters for 'alias'\n");
@@ -122,7 +130,7 @@ int addAlias(std::vector<char*> params, int size) {
     }
 
     char* key = params[1];
-    char* value = params[0];
+    char* value = params[2];
     if (strcmp(key, value) == 0) {
         fprintf(stderr, "Error: can't set an alias to itself\n");
         return 1;
@@ -174,14 +182,14 @@ int addAlias(std::vector<char*> params, int size) {
     return 0;
 }
 
-int removeAlias(std::vector<char*> params, int size) {
+int removeAlias(char* params[], int size) {
     //error cases
     if (size != 1) {
         fprintf(stderr, "Error: invalid parameters for 'unalias'\n");
         return 1;
     }
 
-    char* key = params[0];
+    char* key = params[1];
 
     //key and value of alias map point to text on heap
     std::map<char*,char*>::iterator iter;
@@ -205,19 +213,18 @@ void printAliases() {
     }
 }
 
-int changeDir(std::vector<char*> params, int size) {
+int changeDir(char* params[], int size) {
     if (size == 0) {
         chdir(getenv("HOME"));
         setenv("PWD", getenv("HOME"), 1);
         return 0;
     }
-    if (size > 1) {
+    else if (size > 1) {
         fprintf(stderr, "Error: invalid parameters for 'cd'\n");
         return 1; 
     }
 
-    char* file = params[0];
-
+    char* file = params[1];
     char currentDir[strlen(getenv("PWD"))];
     strcpy(currentDir, getenv("PWD"));
     if (file[0] != '/') {
@@ -227,14 +234,16 @@ int changeDir(std::vector<char*> params, int size) {
             getcwd(cwd, sizeof(cwd));
             setenv("PWD", cwd, 1);
         } else {
-            std::cout << "Directory not found" << std::endl;
+            fprintf(stderr, "Error: directory '%s' not found\n", file);
+            return 1;
         }
     } else {
         if (chdir(file) == 0) {
             getcwd(cwd, sizeof(cwd));
             setenv("PWD", cwd, 1);
         } else {
-            std::cout << "Directory not found" << std::endl;
+            fprintf(stderr, "Error: directory '%s' not found\n", file);
+            return 1;
         }
     }
 
@@ -379,7 +388,7 @@ void outputRedirect(int index) {
                 fd = open(cmdTable[index]->output, O_WRONLY | O_APPEND);
             }
             else {
-                fd = open(cmdTable[index]->output, O_RDWR | O_TRUNC);
+                fd = open(cmdTable[index]->output, O_WRONLY | O_TRUNC);
             }
             dup2(fd, STDOUT_FILENO);
             close(fd);
@@ -391,20 +400,18 @@ void outputRedirect(int index) {
     }
 
     //stderr redirection
-    if (cmdTable[index]->err != nullptr) { 
+    if (cmdTable[index]->err != nullptr || cmdTable[index]->errToOut) { 
         char* name = cmdTable[index]->name;
         if (cmdTable[index]->filepath != nullptr || strcmp(name, "alias") == 0 || strcmp(name, "printenv") == 0) { 
             //stderr redirection
-            if (cmdTable[index]->err != nullptr) {
-                if (cmdTable[index]->errToOut) {
-                    dup2(STDOUT_FILENO, STDERR_FILENO);
-                }
-                else {
-                    int fd = open(cmdTable[index]->err, O_WRONLY );
-                    dup2(fd, STDERR_FILENO);
-                    close(fd);
-                }
-            } 
+            if (cmdTable[index]->errToOut) {
+                dup2(STDOUT_FILENO, STDERR_FILENO);
+            }
+            else {
+                int fd = open(cmdTable[index]->err, O_WRONLY );
+                dup2(fd, STDERR_FILENO);
+                close(fd);
+            }
         }
         else {
             fprintf(stderr, "Error: '%s' can't redirect error", cmdTable[index]->name);
@@ -413,7 +420,7 @@ void outputRedirect(int index) {
     }
 }
 
-int builtIn(std::vector<char*> params, int size, int index) {
+int builtIn(char* params[], int size, int index) {
     //if there is error redirection, set stderr to file
     int savedFd = -1;
     if (cmdTable[index]->err != nullptr) {
@@ -435,8 +442,7 @@ int builtIn(std::vector<char*> params, int size, int index) {
     } else if (strcmp(name, "unsetenv") == 0) {
         rVal = unsetEnv(params, size);
     } else if (strcmp(name, "printenv") == 0) {
-            rVal = printEnv(size);
-            return 0;
+        rVal = printEnv(size);
     } else if (strcmp(name, "alias") == 0) {
         if (size != 0) {
             rVal = addAlias(params, size);
@@ -568,24 +574,24 @@ int processCommand() {
     //parent forks for each general command in command line
     pid_t pid;
     for (int i = 0; i < cmdTable.size(); i++) {
-        char* name = cmdTable[i]->name;
-        int size = cmdTable[i]->parameters.size();
-        //certain built-ins can't be run in background
-        //child processes have different memory spaces than parent, so running 'cd', 'setenv', etc. would be pointless
         //reorganize parameters into array
         char* params[cmdTable[i]->parameters.size() + 2];
         params[0] = cmdTable[i]->filepath;
+        params[cmdTable[i]->parameters.size() + 1] = NULL;
         int k = 1;
         for (int j = cmdTable[i]->parameters.size() - 1; j >= 0; --j) {
             params[k] = cmdTable[i]->parameters[j];
             k++;
         }
 
-        params[cmdTable[i]->parameters.size() + 1] = NULL;
+        char* name = cmdTable[i]->name;
+        int size = cmdTable[i]->parameters.size();
 
+        //certain built-ins can't be run in background
+        //child processes have different memory spaces than parent, so running 'cd', 'setenv', etc. would be pointless
         if (cmdTable[i]->filepath == nullptr && cmdTable.size() == 1 && cmdTable[i]->input == nullptr && cmdTable[i]->output == nullptr) {
             //want alias and printenv to redirect their stdout to a file/pipe using a process
-            return builtIn(cmdTable[i]->parameters, size, i);
+            return builtIn(params, size, i);
         }
 
         //general commands and select built-in can be run in the background (by child processes)
@@ -656,9 +662,10 @@ int processCommand() {
 }
 
 void shell_init() {
+    char cwd[PATH_MAX];
     getcwd(cwd, sizeof(cwd));
     setenv("PATH", ".:/bin", 1);
-    //setenv("HOME", cwd, 1);
+    setenv("HOME", cwd, 1);
     //setenv("PWD", cwd, 1);
 }
 
@@ -714,7 +721,7 @@ int main() {
         }
         //parser error already handled in .y
 
-        //testCommandTable();
+        testCommandTable();
         yyrestart(yyin);
         cleanUp();
     }

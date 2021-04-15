@@ -92,7 +92,7 @@ NOTQUOTE [^"\n{$]
 <EXPECT_SENV>"}" { BEGIN(EXPECT_WORD); for (int i = strlen(env) - 1; i >= 0; --i) {unput(env[i]);} free(env); }
 
 {QUOTE} { BEGIN(EXPECT_WORD); buf = (char*)malloc(256 + 1); buf[0] = '\0'; }
-<EXPECT_WORD>($\{) {printf("test\n"); BEGIN(EXPECT_SENV);}
+<EXPECT_WORD>($\{) {BEGIN(EXPECT_SENV);}
 <EXPECT_WORD>{NOTQUOTE}* { if(checkAlias(yytext) && scanStart == true) { 
                                 char* yycopy = strdup(getAlias(yytext));
                                 for (int i = strlen(yycopy) - 1; i >= 0; --i) {
