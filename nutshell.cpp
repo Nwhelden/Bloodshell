@@ -707,11 +707,12 @@ void freeMem() {
 }
 
 int main() {
-    system("clear");
+    //system("clear");
     shell_init();
     while(1) {
         printPrompt();
         if (yyparse() == 0) {
+            printf("\n");
             if (processCommand() == 0) {
                 if (endShell) {
                     printf("Successfully exited shell\n");
@@ -719,10 +720,12 @@ int main() {
                 }
             }
         }
+        else {
+            yyrestart(yyin);
+        }
         //parser error already handled in .y
 
-        testCommandTable();
-        yyrestart(yyin);
+        //testCommandTable();
         cleanUp();
     }
     freeMem();

@@ -135,6 +135,6 @@ NOTQUOTE [^"\n{$]
 
 {META}	return (int) yytext[0]; //treats every meta character as a separate token of their own ascii value
 
-<<EOF>> { printf("\n"); exit(0); }
+<<EOF>> return END_OF_FILE;
 
 . return UNDEFINED; //captures unrecognized characters (causes error in parser)

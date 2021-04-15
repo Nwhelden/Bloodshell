@@ -9,24 +9,27 @@
     extern bool background;
     extern int yylineno;
     extern char* yytext;
+    extern bool endShell;
 %}
 
+%define parse.error verbose
 %define api.value.type union 
 
-%token <char*> WORD ENV
+%token <char*> WORD
 %token UNDEFINED NEWLINE ERRDIR ERRDIR2 END_OF_FILE
 
 %%
 
 line: NEWLINE { return 0; }
-    | ENV NEWLINE { printf("%s\n", $1); return 0; }
     | cmd NEWLINE { return 0; }
+    | cmd { return 0; }
+    | END_OF_FILE { endShell = true; return 0; }
     ;
 
-cmd: name parameters stdin_redirection out_redirection stdout_redirection stderr_redirection background {;}
+cmd: name parameters stdin_redirection out_redirection background {;}
    ;
 
-cmd2: name parameters out_redirection stdout_redirection stderr_redirection background { return 0;}
+cmd2: name parameters out_redirection {;}
    ;
 
 name: WORD { addCommand($1); }
