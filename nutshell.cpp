@@ -707,7 +707,7 @@ void freeMem() {
 }
 
 int main() {
-    //system("clear");
+    system("clear");
     shell_init();
     while(1) {
         printPrompt();

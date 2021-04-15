@@ -12,7 +12,6 @@
     extern bool endShell;
 %}
 
-%define parse.error verbose
 %define api.value.type union 
 
 %token <char*> WORD
