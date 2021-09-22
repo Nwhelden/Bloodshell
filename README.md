@@ -1,2 +1,2 @@
-# Nutshell
-OS Project
+# Bloodshell
+Custom command-line terminal
